@@ -39,6 +39,7 @@ use libphonenumber\PhoneNumberUtil;
 use OCA\Settings\BackgroundJobs\VerifyUserData;
 use OCP\Accounts\IAccount;
 use OCP\Accounts\IAccountManager;
+use OCP\Accounts\IAccountPropertyCollection;
 use OCP\BackgroundJob\IJobList;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IConfig;
@@ -404,6 +405,9 @@ class AccountManager implements IAccountManager {
 				$userData[$key]['verified'] = self::NOT_VERIFIED;
 			}
 		}
+		if (!isset($userData[IAccountManager::COLLECTION_EMAIL])) {
+			$userData[IAccountManager::COLLECTION_EMAIL] = [];
+		}
 
 		return $userData;
 	}
@@ -582,13 +586,33 @@ class AccountManager implements IAccountManager {
 					'scope' => self::SCOPE_LOCAL,
 					'verified' => self::NOT_VERIFIED,
 				],
+			self::COLLECTION_EMAIL => [],
 		];
+	}
+
+	private function arrayDataToCollection(string $collectionName, array $data): IAccountPropertyCollection {
+		$collection = new AccountPropertyCollection($collectionName);
+		foreach ($data as $property => $propertyData) {
+			$p = new AccountProperty(
+				$property,
+				$propertyData['value'] ?? '',
+				$propertyData['scope'] ?? self::SCOPE_LOCAL,
+				$propertyData['verified'] ?? self::NOT_VERIFIED,
+				''
+			);
+			$collection->addProperty($p);
+		}
+		return $collection;
 	}
 
 	private function parseAccountData(IUser $user, $data): Account {
 		$account = new Account($user);
 		foreach ($data as $property => $accountData) {
-			$account->setProperty($property, $accountData['value'] ?? '', $accountData['scope'] ?? self::SCOPE_LOCAL, $accountData['verified'] ?? self::NOT_VERIFIED);
+			if ($this->isCollection($property)) {
+				$account->setPropertyCollection($this->arrayDataToCollection($property, $accountData));
+			} else {
+				$account->setProperty($property, $accountData['value'] ?? '', $accountData['scope'] ?? self::SCOPE_LOCAL, $accountData['verified'] ?? self::NOT_VERIFIED);
+			}
 		}
 		return $account;
 	}
